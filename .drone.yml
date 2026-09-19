@@ -1,0 +1,300 @@
+kind: pipeline
+type: docker
+name: default
+
+## 禁止默認 clone 行為
+clone:
+  disable: true
+
+steps:
+  ## clone 專案
+  - name: clone
+    image: newevergreen.guardians.one/rd3/drone-git:latest
+    environment:
+      RSYNC_KEY:
+        from_secret: rsync_key
+    commands:
+      - git config --global user.name "drone"
+      - git config --global user.email "drone@cchntek.com"
+
+      # write the ssh key to disk
+      - mkdir ~/.ssh
+      - echo "$RSYNC_KEY" > ~/.ssh/id_rsa
+      - chmod 600 ~/.ssh/id_rsa
+
+      # add to known hosts
+      - giturl=$(echo ${DRONE_GIT_HTTP_URL} | awk -F "//" '{print $2}' | awk -F "/" '{print $1}')
+      - ssh-keyscan -H $giturl >> ~/.ssh/known_hosts
+
+      - git clone ${DRONE_GIT_SSH_URL} .
+      - git checkout $DRONE_COMMIT
+
+      # pull the git submodules
+      - git submodule update --recursive --init
+    when:
+      ref:
+        [
+          refs/heads/develop,
+          refs/heads/qatest,
+          refs/heads/int,
+          refs/heads/twp-int,
+          refs/heads/twp-prod,
+          refs/tags/v*,
+          refs/tags/t*,
+        ]
+  ## 編譯前端專案 code
+  - name: yarn-build
+    image: newevergreen.guardians.one/rd3/drone-node:12.20.0-slim
+    commands:
+      - yarn install
+      - yarn run build
+      - yarn run build168
+    when:
+      ref:
+        [
+          refs/heads/develop,
+          refs/heads/qatest,
+          refs/heads/int,
+          refs/heads/twp-int,
+          refs/heads/twp-prod,
+          refs/tags/v*,
+          refs/tags/t*,
+        ]
+  ## 非正式站.tag內容
+  - name: build-tag-file
+    image: newevergreen.guardians.one/rd3/drone-git:latest
+    commands:
+      - cd /drone/src
+      - echo "$(git rev-parse --short=7 ${DRONE_COMMIT_SHA})-${DRONE_BRANCH}" > ./tmp.txt
+      - cat ./tmp.txt > .tags
+      - echo ",latest-${DRONE_BRANCH}" >> .tags
+    when:
+      ref: [refs/heads/develop, refs/heads/qatest, refs/heads/int,refs/heads/twp-int]
+  ## 正式站.tag內容
+  - name: build-pro-tag-file
+    image: newevergreen.guardians.one/rd3/drone-git:latest
+    commands:
+      - echo ${DRONE_TAG}  > ./tmp.txt
+      - cat ./tmp.txt > .tags
+      - echo ",latest-prod" >> .tags
+    when:
+      ref: [refs/tags/v*, refs/tags/t*]
+  ## twp正式站.tag內容
+  - name: build-tag-file-twp-prod
+    image: newevergreen.guardians.one/rd3/drone-git:latest
+    commands:
+      - cd /drone/src
+      - echo "$(git rev-parse --short=7 ${DRONE_COMMIT_SHA})-${DRONE_BRANCH}" > ./tmp.txt
+      - cat ./tmp.txt > .tags
+      - echo ",latest-${DRONE_BRANCH}" >> .tags
+    when:
+      ref: [refs/heads/twp-prod]
+  ## 建置容器並傳至 harbor (INT Project)
+  - name: build-image
+    image: newevergreen.guardians.one/rd3/drone-docker:18.09.6
+    settings:
+      registry: newevergreen.guardians.one
+      template: >
+      repo: newevergreen.guardians.one/rd3/front-${DRONE_REPO_NAME}
+      dockerfile: ./k8s.Dockerfile
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+    when:
+      ref: [refs/heads/develop, refs/heads/qatest, refs/heads/int,refs/heads/twp-int]
+  ## 建置容器並傳至 harbor (T2 Project)
+  - name: build-sync-images
+    image: newevergreen.guardians.one/rd3/drone-docker:18.09.6
+    settings:
+      registry: newevergreen.guardians.one
+      repo: newevergreen.guardians.one/rd3-sync/front-${DRONE_REPO_NAME}
+      dockerfile: ./k8s.Dockerfile
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+    when:
+      ref: [refs/tags/v*, refs/tags/t*,refs/heads/twp-prod]
+  ## 重新覆蓋 .tag 檔案內容
+  - name: rebuild-tag-file
+    image: newevergreen.guardians.one/rd3/drone-git:latest
+    commands:
+      - cat ./tmp.txt > .tags
+      - cat .tags
+    when:
+      ref:
+        [
+          refs/heads/develop,
+          refs/heads/qatest,
+          refs/heads/int,
+          refs/heads/twp-int,
+          refs/heads/twp-prod,
+          refs/tags/v*,
+          refs/tags/t*,
+        ]
+  ## 佈署至 dev k8s 環境
+  - name: deploy-dev-k8s
+    image: newevergreen.guardians.one/rd3/drone-kubernetes:latest
+    settings:
+      kubernetes_server:
+        from_secret: kubernetes_server_dev
+      namespace: rd3-dev-${DRONE_REPO_NAME}
+      deployment: dev-${DRONE_REPO_NAME}-deployment
+      repo: newevergreen.guardians.one/rd3/front-${DRONE_REPO_NAME}
+      container: ${DRONE_REPO_NAME}
+      use_tags_file: true
+      kubernetes_token:
+        from_secret: kubernetes_token_dev
+    when:
+      ref: [refs/heads/develop]
+  ## 佈署至 qa k8s 環境
+  - name: deploy-qa-k8s
+    image: newevergreen.guardians.one/rd3/drone-kubernetes:latest
+    settings:
+      kubernetes_server:
+        from_secret: kubernetes_server_qa
+      namespace: rd3-qa-${DRONE_REPO_NAME}
+      deployment: qa-${DRONE_REPO_NAME}-deployment
+      repo: newevergreen.guardians.one/rd3/front-${DRONE_REPO_NAME}
+      container: ${DRONE_REPO_NAME}
+      use_tags_file: true
+      kubernetes_token:
+        from_secret: kubernetes_token_qa
+    when:
+      ref: [refs/heads/qatest]
+  ## 佈署至 int k8s 環境
+  - name: deploy-int-k8s
+    image: newevergreen.guardians.one/rd3/drone-kubernetes:latest
+    settings:
+      kubernetes_server:
+        from_secret: kubernetes_server_int
+      namespace: rd3-int-${DRONE_REPO_NAME}
+      deployment: int-${DRONE_REPO_NAME}-deployment
+      repo: newevergreen.guardians.one/rd3/front-${DRONE_REPO_NAME}
+      container: ${DRONE_REPO_NAME}
+      use_tags_file: true
+      kubernetes_token:
+        from_secret: kubernetes_token_int
+    when:
+      ref: [refs/heads/int]
+  ## 佈署至 int 168 k8s 環境
+  - name: deploy-int-168-k8s
+    image: newevergreen.guardians.one/rd3/drone-kubernetes:latest
+    environment:
+      HTTPS_PROXY: 3.35.94.74:3128
+      HTTP_PROXY: 3.35.94.74:3128
+    settings:
+      kubernetes_server:
+        from_secret: kubernetes_server_int_168_2024
+      namespace: rd3-int-${DRONE_REPO_NAME}
+      deployment: ${DRONE_REPO_NAME}-deployment
+      repo: asia-docker.pkg.dev/rebirth-55688/rd3/front-${DRONE_REPO_NAME}
+      container: ${DRONE_REPO_NAME}
+      use_tags_file: true
+      kubernetes_token:
+        from_secret: kubernetes_token_168_2024
+    when:
+      ref: [refs/heads/int]
+  ## 佈署至 pro 2024 k8s 環境
+  - name: deploy-pro-2024-k8s
+    image: newevergreen.guardians.one/rd3/drone-kubernetes:latest
+    settings:
+      kubernetes_server:
+        from_secret: kubernetes_server_prod_2024
+      namespace: rd3-pro-${DRONE_REPO_NAME}
+      deployment: ${DRONE_REPO_NAME}-deployment
+      repo: asia-docker.pkg.dev/npnp-409608/rd3-sync/front-${DRONE_REPO_NAME}
+      container: ${DRONE_REPO_NAME}
+      tag: ${DRONE_TAG}
+      kubernetes_token:
+        from_secret: kubernetes_token_2024
+    when:
+      ref: [refs/tags/v*]
+
+  ## 佈署至 pro 168 k8s 環境
+  - name: deploy-pro-168-k8s
+    image: newevergreen.guardians.one/rd3/drone-kubernetes:latest
+    environment:
+      HTTPS_PROXY: 3.35.94.74:3128
+      HTTP_PROXY: 3.35.94.74:3128
+    settings:
+      kubernetes_server:
+        from_secret: kubernetes_server_prod_168
+      namespace: rd3-pro-${DRONE_REPO_NAME}
+      deployment: ${DRONE_REPO_NAME}-deployment
+      repo: asia.gcr.io/cube-demo-317716/rd3-sync/front-${DRONE_REPO_NAME}
+      container: ${DRONE_REPO_NAME}
+      tag: ${DRONE_TAG}
+      kubernetes_token:
+        from_secret: kubernetes_token_ae
+    when:
+      ref: [refs/tags/v*]
+  ## Telegram 推播通知
+  - name: telegram
+    image: newevergreen.guardians.one/rd3/drone-telegram:1.3.5
+    settings:
+      token:
+        from_secret: telegram_token
+      to:
+        from_secret: telegram_to
+      format: markdown
+      message: >
+        {{#success build.status}}
+        ✅ Build #{{build.number}} of `{{repo.name}}` succeeded.
+
+        📝 Commit by `{{commit.author}}` on `{{commit.branch}}`:
+
+        ```
+        {{commit.message}}
+        ```
+
+        🌐 {{ build.link }}
+        {{else}}
+        ❌ Build #{{build.number}} of `{{repo.name}}` failed.
+
+        📝  Commit by `{{commit.author}}` on `{{commit.branch}}`:
+
+        ```
+        {{commit.message}}
+        ```
+        🌐 {{ build.link }}
+        {{/success}}
+
+
+        〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️
+    when:
+      status:
+        - success
+        - failure
+
+## VM 掛載路徑
+volumes:
+  - name: cache
+    host:
+      path: /usr/local/app/cache
+  - name: docker
+    host:
+      path: /var/run/docker.sock
+
+## 載入 log 設定
+image_pull_secrets:
+  - dockerconfigjson
+
+## 觸發 pipeline 條件
+trigger:
+  ref:
+    include:
+      - refs/heads/develop
+      - refs/heads/qatest
+      - refs/heads/int
+      - refs/heads/twp-int
+      - refs/heads/twp-prod
+      - refs/tags/v*
+      - refs/tags/t*
