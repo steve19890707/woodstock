@@ -85,7 +85,7 @@ export const apiGetImgsDomain = (query = "imgbaseon") => {
   // );
   return Promise.resolve({
     data: {
-      result: "/mock/hfyali",
+      result: `${process.env.PUBLIC_URL || ""}/mock/hfyali`,
     },
   });
 };
