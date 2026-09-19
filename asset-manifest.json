@@ -1,0 +1,22 @@
+{
+  "files": {
+    "main.css": "/woodstock/static/css/main.93dc72c9.chunk.css",
+    "main.js": "/woodstock/static/js/main.03cbed47.chunk.js",
+    "main.js.map": "/woodstock/static/js/main.03cbed47.chunk.js.map",
+    "runtime-main.js": "/woodstock/static/js/runtime-main.bb73bf0a.js",
+    "runtime-main.js.map": "/woodstock/static/js/runtime-main.bb73bf0a.js.map",
+    "static/js/2.0a52c8d3.chunk.js": "/woodstock/static/js/2.0a52c8d3.chunk.js",
+    "static/js/2.0a52c8d3.chunk.js.map": "/woodstock/static/js/2.0a52c8d3.chunk.js.map",
+    "index.html": "/woodstock/index.html",
+    "static/css/main.93dc72c9.chunk.css.map": "/woodstock/static/css/main.93dc72c9.chunk.css.map",
+    "static/js/2.0a52c8d3.chunk.js.LICENSE.txt": "/woodstock/static/js/2.0a52c8d3.chunk.js.LICENSE.txt",
+    "static/media/UI_Button.f4df4ad0.mp3": "/woodstock/static/media/UI_Button.f4df4ad0.mp3",
+    "static/media/UI_Button_GB.bf81f694.mp3": "/woodstock/static/media/UI_Button_GB.bf81f694.mp3"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.bb73bf0a.js",
+    "static/js/2.0a52c8d3.chunk.js",
+    "static/css/main.93dc72c9.chunk.css",
+    "static/js/main.03cbed47.chunk.js"
+  ]
+}
