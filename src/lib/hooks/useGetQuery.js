@@ -7,7 +7,7 @@ const is168 = process.env.REACT_APP_SITE_TYPE === "168"
 
 const useGetQuery = () => {
   const [defaultLang, setDefaultLang] = useState("")
-  const [gameId, setGameId] = useState("")
+  const [gameId, setGameId] = useState("121")
   const [minExtra, setMinExtra] = useState(0)
   const [maxExtra, setMaxExtra] = useState(0)
   const [denom, setDenom] = useState(1)
@@ -32,7 +32,7 @@ const useGetQuery = () => {
       getQuery("currency") && getQuery("currency").toLowerCase()
     const QueryIsCurrency = getQuery("isCurrency")
     const QuerySoundOn = getQuery("soundOn")
-    QueryGameId && setGameId(QueryGameId)
+    setGameId(QueryGameId || "121")
     QueryExtra && setMinExtra(QueryExtra.split(",")[0])
     QueryExtra && setMaxExtra(QueryExtra.split(",")[1])
     QueryDenom && setDenom(QueryDenom)

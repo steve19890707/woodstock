@@ -29,7 +29,8 @@
     "build168": "yarn Env168 react-scripts build",
     "Env168": "BUILD_PATH='./build168' REACT_APP_SITE_TYPE='168' REACT_APP_API_DOMAIN='rebirth.games' REACT_APP_API_DOMAIN_PROD='rebirth.games' REACT_APP_API_DOMAIN_PREFIX='' REACT_APP_IMG_DOMAIN='s3.ap-northeast-1.amazonaws.com/prd-images.rebirth.games' ",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:gh-pages": "PUBLIC_URL=/woodstock react-scripts build"
   },
   "eslintConfig": {
     "extends": [
@@ -48,5 +49,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  }
+  },
+  "homepage": "https://steve19890707.github.io/woodstock"
 }

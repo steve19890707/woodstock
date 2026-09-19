@@ -3,7 +3,7 @@ import { createSlice } from "@reduxjs/toolkit";
 const props = createSlice({
   name: "props",
   initialState: {
-    imgsdomain: `https://images.jiamengweiquan.com`,
+    imgsdomain: `/mock/hfyali`,
   },
   reducers: {
     setImgsDomain: (state, actions) => {
